@@ -1,0 +1,26 @@
+app:
+  id: ari:cloud:ecosystem::app/f1f48843-8a29-4173-8f08-2e9a41e5f5ee
+permissions:
+  external:
+    fetch:
+      client:
+        - "quickchart.io/graphviz"
+  scopes:
+    - "read:jira-work"
+modules:
+  function:
+    - handler: index.handler
+      key: resolver
+  jira:issuePanel:
+    - icon: resource:logo;logo.svg
+      key: issue-dep-graph
+      resolver:
+        function: resolver
+      resource: main
+      title: Issue Dependency Graph
+      viewportSize: large
+resources:
+  - key: main
+    path: static/dep-graph/build
+  - key: logo
+    path: static/dep-graph/build
