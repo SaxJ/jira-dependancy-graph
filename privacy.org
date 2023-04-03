@@ -1,4 +1,0 @@
-#+title: Privacy
-* Privacy
-This does not use your personal data.
-It uses only Jira issue keys to render the graph.

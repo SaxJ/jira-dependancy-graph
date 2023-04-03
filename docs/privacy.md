@@ -8,10 +8,9 @@ Our plugin only collects the issue keys and their connections from your Jira ins
 
 ## How do we use this information?
 
-We use the issue keys and their connections to generate dependency graphs using QuickChart.io, a third-party graphing service. 
-We only share this information with QuickChart.io, and only for the purpose of generating the graphs.
+We use the issue keys and their connections to generate dependency graphs.
 
-We do not use this information for any other purpose, nor do we share it with any other third party.
+We do not use this information for any other purpose, nor do we share it with any third party.
 
 ## How do we protect your information?
 
@@ -23,8 +22,7 @@ We do not use cookies or any other tracking mechanisms.
 
 ## Do we disclose any information to outside parties?
 
-We do not disclose any information to any third party, except for the purpose of generating dependency graphs using QuickChart.io.
-
+We do not disclose any information to any third party.
 ## Your Consent
 
 By using our Jira Dependancy Graph plugin, you consent to our privacy policy.
