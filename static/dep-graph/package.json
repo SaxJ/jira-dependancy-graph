@@ -7,6 +7,7 @@
     "@atlaskit/css-reset": "^6.0.1",
     "@forge/bridge": "2.5.2",
     "beautiful-react-diagrams": "^0.5.1",
+    "mermaid": "^10.0.2",
     "react": "^16.13.1",
     "react-dom": "^16.13.1",
     "react-mermaid2": "^0.1.4"

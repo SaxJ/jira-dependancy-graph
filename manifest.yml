@@ -1,6 +1,12 @@
 app:
   id: ari:cloud:ecosystem::app/f1f48843-8a29-4173-8f08-2e9a41e5f5ee
 permissions:
+  content:
+    scripts:
+      - 'blob:'
+      - 'unsafe-inline'
+    styles:
+      - 'unsafe-inline'
   external:
     fetch:
       client:
