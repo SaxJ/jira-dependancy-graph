@@ -7,10 +7,6 @@ permissions:
       - 'unsafe-inline'
     styles:
       - 'unsafe-inline'
-  external:
-    fetch:
-      client:
-        - "quickchart.io/graphviz"
   scopes:
     - "read:jira-work"
 modules:
