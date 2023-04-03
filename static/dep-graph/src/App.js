@@ -2,7 +2,6 @@ import React, { useEffect, useState } from 'react';
 import { invoke, requestJira } from '@forge/bridge';
 import mermaid from 'mermaid';
 
-
 const parseLink = (root, link) => {
   return {
     type: link.type.name,
@@ -56,33 +55,13 @@ const makeGraphMermaid = async (rootKey) => {
     return `${link.root.replace('-', '')} ${arrow}|${link.type}| ${link.other.replace('-', '')}`;
   });
 
-  const graphList = [...nodes, ...links];
+  const graphList = [...nodes, ...actions, ...links];
   const graph = `
-  %%{init: { "flowchart": { "htmlLabels": true, "diagramPadding": 20, "padding": 20  } }}%%
   flowchart TD
   ${graphList.join('\n')}
   `;
   const {svg} = await mermaid.render('graphz', graph);
   return svg;
-  // const blob = new Blob([svg], {type: 'image/svg+xml'});
-  // return URL.createObjectURL(blob);
-}
-
-const makeGraph = async (rootKey) => {
-  const {allLinks, allIssues } = await traverseIssues(rootKey);
-  const {baseUrl} = await (await requestJira('/rest/api/3/serverInfo')).json();
-
-  const nodes = allIssues.map(i => `"${i}" [shape=box,href="${baseUrl}/browse/${i}",target="_blank"];`);
-  const links = allLinks.filter(l => l.dir === 'out').map((link) => {
-    const arrow = link.dir === 'in' ? '<-' : '->';
-    return `"${link.root}"${arrow}"${link.other}" [label="${link.type}"];`;
-  });
-
-  const graphList = [...nodes, ...links];
-  const graph = graphList.join('');
-  const url = `https://quickchart.io/graphviz?format=svg&graph=digraph{${graph}}`
-  const imgResponse = await (await fetch(url)).text();
-  return URL.createObjectURL(imgResponse);
 }
 
 function App() {
@@ -94,13 +73,12 @@ function App() {
   }, []);
 
   useEffect(() => {
-    // makeGraph(key).then(setGraph);
     makeGraphMermaid(key).then(setGraph);
   }, [key])
 
   return (
     <div>
-      {graph ? <div dangerouslySetInnerHTML={{__html: graph}}></div> : 'Loading...'}
+      {graph ? <div dangerouslySetInnerHTML={{__html: graph}}></div> : <div className='rotating'></div>}
     </div>
   );
 }
