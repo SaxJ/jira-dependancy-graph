@@ -11,6 +11,34 @@ const parseLink = (root, link) => {
   };
 }
 
+const getEpicIssues = async (epicKey) => {
+  const searchString = encodeURI(`parent = ${epicKey}`);
+  const epicResponse = await requestJira(`/rest/api/3/search?fields=key,issuelinks&jql=${searchString}`);
+  const epic = await epicResponse.json();
+  const issues = epic.issues;
+  let links = []
+  let keys = [];
+  for (const issue of issues) {
+    const {issuelinks} = issue.fields;
+    for (const link of issuelinks) {
+      links.push(parseLink(link));
+    }
+    keys.push(issue.key);
+  }
+
+  return {
+    allLinks: links,
+    allIssues: keys,
+  };
+}
+
+const issueIsEpic = async (key) => {
+  const issueResponse = await requestJira(`/rest/api/3/issue/${key}?fields=issuetype`);
+  const issue = await issueResponse.json();
+  const typeName = issue.fields.issuetype.name;
+  return typeName === "Epic";
+}
+
 const traverseIssues = async (rootKey) => {
   let queue = [rootKey];
   let links = [];
@@ -45,7 +73,9 @@ const traverseIssues = async (rootKey) => {
 }
 
 const makeGraphMermaid = async (rootKey) => {
-  const {allLinks, allIssues } = await traverseIssues(rootKey);
+  const isEpic = issueIsEpic(rootKey);
+
+  const {allLinks, allIssues} = isEpic ? await getEpicIssues(rootKey) : await traverseIssues(rootKey);
   const {baseUrl} = await (await requestJira('/rest/api/3/serverInfo')).json();
 
   const nodes = allIssues.map(i => `${i.replace('-', '')}[${i}]`);
