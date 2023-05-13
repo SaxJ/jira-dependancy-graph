@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { invoke, requestJira } from '@forge/bridge';
+import { invoke, requestJira, router } from '@forge/bridge';
 import mermaid from 'mermaid';
 
 const parseLink = (root, link) => {
@@ -67,7 +67,6 @@ const traverseIssues = async (rootKey) => {
     }
   }
 
-  console.log('traverse returning');
   return {
     allLinks: links,
     allIssues: Object.keys(seen),
@@ -84,29 +83,31 @@ const startProcessing = async (key, isEpic) => {
 
 const makeGraphMermaid = async (rootKey) => {
   const isEpic = await issueIsEpic(rootKey);
-
-  console.log('doing the thing');
-  console.log(isEpic ? 'is epic' : 'not epic');
   const traverseResult = await startProcessing(rootKey, isEpic);
-  console.log(traverseResult);
   const {allLinks, allIssues} = traverseResult;
 
-  const {baseUrl} = await (await requestJira('/rest/api/3/serverInfo')).json();
-
-  const nodes = allIssues.map(i => `${i.replace('-', '')}[${i}]`);
-  const actions = allIssues.map(i => `click ${i.replace('-', '')} "${baseUrl}/browse/${i}" _blank`)
+  const nodes = allIssues.map(i => `${i.replace('-', '_')}[${i}]`);
   const links = allLinks.filter(l => l.dir === 'out').map((link) => {
     const arrow = link.dir === 'in' ? '<--' : '-->';
-    return `${link.root.replace('-', '')} ${arrow}|${link.type}| ${link.other.replace('-', '')}`;
+    return `${link.root.replace('-', '_')} ${arrow}|${link.type}| ${link.other.replace('-', '_')}`;
   });
 
-  const graphList = [...nodes, ...actions, ...links];
+  const graphList = [...nodes, ...links];
   const graph = `
   flowchart TD
   ${graphList.join('\n')}
   `;
-  const {svg} = await mermaid.render('graphz', graph);
-  return svg;
+  const rendered = await mermaid.render('graphz', graph);
+  return rendered;
+}
+
+const clickedGraph = (event) => {
+  const issueName = event.target.textContent;
+  if (issueName === null || issueName === '') {
+    return;
+  }
+
+  router.open(`/browse/${issueName}`);
 }
 
 function App() {
@@ -121,9 +122,11 @@ function App() {
     makeGraphMermaid(key).then(setGraph);
   }, [key])
 
+  const {svg} = graph ?? {};
+  const graphDiv = graph ? (<div dangerouslySetInnerHTML={{__html: svg}} onClick={clickedGraph}></div>) :  (<div className='rotating'></div>);
   return (
     <div>
-      {graph ? <div dangerouslySetInnerHTML={{__html: graph}}></div> : <div className='rotating'></div>}
+      {graphDiv}
     </div>
   );
 }
