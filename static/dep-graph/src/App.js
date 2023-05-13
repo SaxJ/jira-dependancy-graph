@@ -50,15 +50,20 @@ const traverseIssues = async (rootKey) => {
       continue;
     }
 
-    seen[currentKey] = true;
     let issueResponse = null;
     try {
-      issueResponse = await requestJira(`/rest/api/3/issue/${currentKey}?fields=key,issuelinks`);
+      issueResponse = await requestJira(`/rest/api/3/issue/${currentKey}?fields=key,issuelinks,status`);
     } catch (e) {
       console.log(e);
     }
     const issue = await issueResponse.json();
     const {issuelinks} = issue.fields;
+
+    seen[currentKey] = {
+      key: currentKey,
+      colour: issue.fields.status.statusCategory.colorName,
+      status: issue.fields.status.name,
+    };
 
     for (let l of issuelinks) {
       const parsed = parseLink(currentKey, l);
@@ -69,7 +74,7 @@ const traverseIssues = async (rootKey) => {
 
   return {
     allLinks: links,
-    allIssues: Object.keys(seen),
+    allIssues: Object.values(seen),
   };
 }
 
@@ -86,13 +91,14 @@ const makeGraphMermaid = async (rootKey) => {
   const traverseResult = await startProcessing(rootKey, isEpic);
   const {allLinks, allIssues} = traverseResult;
 
-  const nodes = allIssues.map(i => `${i.replace('-', '_')}[${i}]`);
+  const nodes = allIssues.map(i => `${i.key.replace('-', '_')}[${i.key}]`);
+  const colours = allIssues.map(i => `style ${i.key.replace('-', '_')} fill:${statusToColour(i.status)}`);
   const links = allLinks.filter(l => l.dir === 'out').map((link) => {
     const arrow = link.dir === 'in' ? '<--' : '-->';
     return `${link.root.replace('-', '_')} ${arrow}|${link.type}| ${link.other.replace('-', '_')}`;
   });
 
-  const graphList = [...nodes, ...links];
+  const graphList = [...nodes, ...colours, ...links];
   const graph = `
   flowchart TD
   ${graphList.join('\n')}
@@ -103,13 +109,40 @@ const makeGraphMermaid = async (rootKey) => {
 
 const clickedGraph = (event) => {
   const issueName = event.target.textContent;
-  if (issueName === null || issueName === '') {
+  const isIssueText = /[a-zA-Z]+-\d+/.test(issueName);
+  if (issueName === null || issueName === '' || !isIssueText) {
     return;
   }
 
   router.open(`/browse/${issueName}`);
 }
 
+const statusToColour = (name) => {
+  switch (name) {
+    case 'To Do':
+      return '#b6b6b7';
+    case 'In Progress':
+      return '#c8cfd8';
+    case 'Done':
+      return '#b2cac0';
+    default:
+      return hashStringToColour(name);
+  }
+};
+
+const hashStringToColour = function(str) {
+    var hash = 0;
+    for (var i = 0; i < str.length; i++) {
+        hash = str.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    var colour = '#';
+    for (var i = 0; i < 3; i++) {
+        var value = (hash >> (i * 8)) & 0xFF;
+        colour += ('00' + value.toString(16)).substr(-2);
+    }
+    return colour;
+}
+ 
 function App() {
   const [key, setKey] = useState(null);
   const [graph, setGraph] = useState(null);
