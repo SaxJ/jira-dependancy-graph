@@ -110,7 +110,7 @@ const makeGraphMermaid = async (rootKey) => {
 const clickedGraph = (event) => {
   const issueName = event.target.textContent;
   const isIssueText = /[a-zA-Z]+-\d+/.test(issueName);
-  if (issueName === null || issueName === '' || !isIssueText) {
+  if (issueName === null || issueName === '' || !isIssueText || issueName.length > 10) {
     return;
   }
 
