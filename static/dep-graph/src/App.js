@@ -12,8 +12,14 @@ const parseLink = (root, link) => {
 }
 
 const getEpicIssues = async (epicKey) => {
-  const searchString = encodeURI(`parent = ${epicKey}`);
-  const epicResponse = await requestJira(`/rest/api/3/search?fields=key,issuelinks&jql=${searchString}`);
+  const epicResponse = await requestJira(`/rest/api/3/search`, {
+    body: `{"fields": ["key"], "jql": "parent = ${epicKey}"}`,
+    method: 'POST',
+    headers: {
+      'Accept': 'application/json',
+      'Content-Type': 'application/json',
+    }
+  });
   const epic = await epicResponse.json();
   const issues = epic.issues;
 
@@ -35,9 +41,9 @@ const issueIsEpic = async (key) => {
 }
 
 const traverseIssues = async (rootKey) => {
-  let queue = [rootKey];
-  let links = [];
-  let seen = {};
+  const queue = [rootKey];
+  const links = [];
+  const seen = {};
   while (queue.length > 0) {
     let currentKey = queue.pop();
     if (currentKey in seen) {
@@ -61,26 +67,29 @@ const traverseIssues = async (rootKey) => {
     }
   }
 
+  console.log('traverse returning');
   return {
     allLinks: links,
     allIssues: Object.keys(seen),
   };
 }
 
-const makeGraphMermaid = async (rootKey) => {
-  const isEpic = issueIsEpic(rootKey);
-
-  let allLinks = [];
-  let allIssues = [];
+const startProcessing = async (key, isEpic) => {
   if (isEpic) {
-    const {links, issues} = await getEpicIssues(rootKey);
-    allLinks = links;
-    allIssues = issues;
+    return await getEpicIssues(key);
   } else {
-    const {links, issues} = await traverseIssues(rootKey);
-    allLinks = links;
-    allIssues = issues;
+    return await traverseIssues(key);
   }
+}
+
+const makeGraphMermaid = async (rootKey) => {
+  const isEpic = await issueIsEpic(rootKey);
+
+  console.log('doing the thing');
+  console.log(isEpic ? 'is epic' : 'not epic');
+  const traverseResult = await startProcessing(rootKey, isEpic);
+  console.log(traverseResult);
+  const {allLinks, allIssues} = traverseResult;
 
   const {baseUrl} = await (await requestJira('/rest/api/3/serverInfo')).json();
 
