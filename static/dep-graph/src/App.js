@@ -60,7 +60,7 @@ const compileGraphFromEpic = (issues) => {
 
 const getEpicIssues = async (epicKey) => {
   const epicResponse = await requestJira(`/rest/api/3/search`, {
-    body: `{"fields": ["key","issuelinks","status"], "jql": "parent = ${epicKey}"}`,
+    body: `{"fields": ["key","issuelinks","status"], "jql": "parentEpic = ${epicKey}"}`,
     method: 'POST',
     headers: {
       'Accept': 'application/json',
