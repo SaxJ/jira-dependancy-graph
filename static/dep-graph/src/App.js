@@ -11,9 +11,56 @@ const parseLink = (root, link) => {
   };
 }
 
+const issueToNode = (issue, status) => {
+  const key = issue.key;
+  const nodeId = key.replace('-', '_');
+
+  return `${nodeId}["${key}<br/><small>${status}</small>"]`;
+}
+
+const issueToLinks = (issue) => {
+  const parentKey = issue.key;
+  const parentId = parentKey.replace('-', '_');
+
+  const linkObjects = issue.fields.issuelinks;
+  const links = []
+  for (const linkObject of linkObjects) {
+    if (linkObject.inwardIssue) {
+      continue;
+    }
+    const linkType = linkObject.type.name;
+    const destination = linkObject.outwardIssue.key.replace('-', '_');
+
+    links.push(`${parentId} -->|${linkType}| ${destination}`);
+  }
+
+  return links;
+}
+
+const compileGraphFromEpic = (issues) => {
+  const nodes = [];
+  const links = [];
+  for (const issue of issues) {
+    nodes.push(issueToNode(issue, issue.fields.status.name));
+    const ls = issueToLinks(issue);
+    for (const l of ls) {
+      links.push(l);
+    }
+  }
+
+
+  const graphList = [...nodes, ...links];
+  const graph = `
+  flowchart TD
+  ${graphList.join('\n')}
+  `;
+
+  return graph;
+}
+
 const getEpicIssues = async (epicKey) => {
   const epicResponse = await requestJira(`/rest/api/3/search`, {
-    body: `{"fields": ["key"], "jql": "parent = ${epicKey}"}`,
+    body: `{"fields": ["key","issuelinks","status"], "jql": "parent = ${epicKey}"}`,
     method: 'POST',
     headers: {
       'Accept': 'application/json',
@@ -23,14 +70,7 @@ const getEpicIssues = async (epicKey) => {
   const epic = await epicResponse.json();
   const issues = epic.issues;
 
-  if (issues.length > 0) {
-    return await traverseIssues(issues[0].key);
-  } else {
-    return {
-      allLinks: [],
-      allIssues: [],
-    };
-  }
+  return issues;
 }
 
 const issueIsEpic = async (key) => {
@@ -57,7 +97,7 @@ const traverseIssues = async (rootKey) => {
       console.log(e);
     }
     const issue = await issueResponse.json();
-    const {issuelinks} = issue.fields;
+    const { issuelinks } = issue.fields;
 
     seen[currentKey] = {
       key: currentKey,
@@ -78,30 +118,29 @@ const traverseIssues = async (rootKey) => {
   };
 }
 
-const startProcessing = async (key, isEpic) => {
-  if (isEpic) {
-    return await getEpicIssues(key);
-  } else {
-    return await traverseIssues(key);
-  }
-}
-
 const makeGraphMermaid = async (rootKey) => {
   const isEpic = await issueIsEpic(rootKey);
-  const traverseResult = await startProcessing(rootKey, isEpic);
-  const {allLinks, allIssues} = traverseResult;
+  if (isEpic) {
+    const issues = await getEpicIssues(rootKey);
+    const graph = compileGraphFromEpic(issues);
+    const rendered = await mermaid.render('graphz', graph);
+    return rendered;
+  }
 
-  const nodes = allIssues.map(i => `${i.key.replace('-', '_')}[${i.key}]`);
-  const colours = allIssues.map(i => `style ${i.key.replace('-', '_')} fill:${statusToColour(i.status)}`);
+  const traverseResult = await traverseIssues(rootKey);
+  const { allLinks, allIssues } = traverseResult;
+
+  const nodes = allIssues.map(i => issueToNode(i, i.status));
   const links = allLinks.filter(l => l.dir === 'out').map((link) => {
     const arrow = link.dir === 'in' ? '<--' : '-->';
     return `${link.root.replace('-', '_')} ${arrow}|${link.type}| ${link.other.replace('-', '_')}`;
   });
 
-  const graphList = [...nodes, ...colours, ...links];
+  const graphList = [...nodes, ...links];
   const graph = `
   flowchart TD
   ${graphList.join('\n')}
+  style ${rootKey.replace('-', '_')} stroke:red,stroke-dasharray:5 5
   `;
   const rendered = await mermaid.render('graphz', graph);
   return rendered;
@@ -117,32 +156,6 @@ const clickedGraph = (event) => {
   router.open(`/browse/${issueName}`);
 }
 
-const statusToColour = (name) => {
-  switch (name) {
-    case 'To Do':
-      return '#b6b6b7';
-    case 'In Progress':
-      return '#c8cfd8';
-    case 'Done':
-      return '#b2cac0';
-    default:
-      return hashStringToColour(name);
-  }
-};
-
-const hashStringToColour = function(str) {
-    var hash = 0;
-    for (var i = 0; i < str.length; i++) {
-        hash = str.charCodeAt(i) + ((hash << 5) - hash);
-    }
-    var colour = '#';
-    for (var i = 0; i < 3; i++) {
-        var value = (hash >> (i * 8)) & 0xFF;
-        colour += ('00' + value.toString(16)).substr(-2);
-    }
-    return colour;
-}
- 
 function App() {
   const [key, setKey] = useState(null);
   const [graph, setGraph] = useState(null);
@@ -155,8 +168,8 @@ function App() {
     makeGraphMermaid(key).then(setGraph);
   }, [key])
 
-  const {svg} = graph ?? {};
-  const graphDiv = graph ? (<div dangerouslySetInnerHTML={{__html: svg}} onClick={clickedGraph}></div>) :  (<div className='rotating'></div>);
+  const { svg } = graph ?? {};
+  const graphDiv = graph ? (<div dangerouslySetInnerHTML={{ __html: svg }} onClick={clickedGraph}></div>) : (<div className='rotating'></div>);
   return (
     <div>
       {graphDiv}
