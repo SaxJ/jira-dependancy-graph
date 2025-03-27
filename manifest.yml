@@ -1,12 +1,14 @@
 app:
   id: ari:cloud:ecosystem::app/f1f48843-8a29-4173-8f08-2e9a41e5f5ee
+runtime:
+  name: nodejs22.x
 permissions:
   content:
     scripts:
-      - 'blob:'
-      - 'unsafe-inline'
+      - "blob:"
+      - "unsafe-inline"
     styles:
-      - 'unsafe-inline'
+      - "unsafe-inline"
   scopes:
     - "read:jira-work"
 modules:
