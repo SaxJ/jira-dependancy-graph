@@ -15,7 +15,9 @@ const issueToNode = (issue, status) => {
   const key = issue.key;
   const nodeId = key.replace('-', '_');
 
-  return `${nodeId}["${key}<br/><small>${status}</small>"]`;
+  const title = `${issue.flagged ? '🚩' : ''} ${key}`;
+
+  return `${nodeId}["${title}<br/><small>${status}</small>"]`;
 }
 
 const issueToLinks = (issue) => {
@@ -80,6 +82,14 @@ const issueIsEpic = async (key) => {
   return typeName === "Epic";
 }
 
+const isFlagged = (issue) => {
+  const fields = issue.fields;
+  return Object.entries(fields).some((entry) => {
+    const [key, val] = entry;
+    return key.includes('custom') && JSON.stringify(val).includes('Impediment');
+  })
+}
+
 const traverseIssues = async (rootKey) => {
   const queue = [rootKey];
   const links = [];
@@ -92,7 +102,7 @@ const traverseIssues = async (rootKey) => {
 
     let issueResponse = null;
     try {
-      issueResponse = await requestJira(`/rest/api/3/issue/${currentKey}?fields=key,issuelinks,status`);
+      issueResponse = await requestJira(`/rest/api/3/issue/${currentKey}`);
     } catch (e) {
       console.log(e);
     }
@@ -103,6 +113,7 @@ const traverseIssues = async (rootKey) => {
       key: currentKey,
       colour: issue.fields.status.statusCategory.colorName,
       status: issue.fields.status.name,
+      flagged: isFlagged(issue),
     };
 
     for (let l of issuelinks) {
