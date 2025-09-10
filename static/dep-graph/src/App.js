@@ -1,43 +1,43 @@
-import React, { useEffect, useState } from 'react';
-import { invoke, requestJira, router } from '@forge/bridge';
-import mermaid from 'mermaid';
+import React, { useEffect, useState } from "react";
+import { invoke, requestJira, router } from "@forge/bridge";
+import mermaid from "mermaid";
 
 const parseLink = (root, link) => {
   return {
     type: link.type.name,
-    dir: link.inwardIssue ? 'in' : 'out',
+    dir: link.inwardIssue ? "in" : "out",
     root: root,
     other: link.inwardIssue ? link.inwardIssue.key : link.outwardIssue.key,
   };
-}
+};
 
 const issueToNode = (issue, status) => {
   const key = issue.key;
-  const nodeId = key.replace('-', '_');
+  const nodeId = key.replace("-", "_");
 
-  const title = `${issue.flagged ? '🚩' : ''} ${key}`;
+  const title = `${issue.flagged ? "🚩" : ""} ${key}`;
 
   return `${nodeId}["${title}<br/><small>${status}</small>"]`;
-}
+};
 
 const issueToLinks = (issue) => {
   const parentKey = issue.key;
-  const parentId = parentKey.replace('-', '_');
+  const parentId = parentKey.replace("-", "_");
 
   const linkObjects = issue.fields.issuelinks;
-  const links = []
+  const links = [];
   for (const linkObject of linkObjects) {
     if (linkObject.inwardIssue) {
       continue;
     }
     const linkType = linkObject.type.name;
-    const destination = linkObject.outwardIssue.key.replace('-', '_');
+    const destination = linkObject.outwardIssue.key.replace("-", "_");
 
     links.push(`${parentId} -->|${linkType}| ${destination}`);
   }
 
   return links;
-}
+};
 
 const compileGraphFromEpic = (issues) => {
   const nodes = [];
@@ -50,45 +50,46 @@ const compileGraphFromEpic = (issues) => {
     }
   }
 
-
   const graphList = [...nodes, ...links];
   const graph = `
   flowchart TD
-  ${graphList.join('\n')}
+  ${graphList.join("\n")}
   `;
 
   return graph;
-}
+};
 
 const getEpicIssues = async (epicKey) => {
-  const epicResponse = await requestJira(`/rest/api/3/search`, {
+  const epicResponse = await requestJira(`/rest/api/3/search/jql`, {
     body: `{"fields": ["key","issuelinks","status"], "jql": "parentEpic = ${epicKey} OR parent = ${epicKey}"}`,
-    method: 'POST',
+    method: "POST",
     headers: {
-      'Accept': 'application/json',
-      'Content-Type': 'application/json',
-    }
+      Accept: "application/json",
+      "Content-Type": "application/json",
+    },
   });
   const epic = await epicResponse.json();
   const issues = epic.issues;
 
   return issues;
-}
+};
 
 const issueIsEpic = async (key) => {
-  const issueResponse = await requestJira(`/rest/api/3/issue/${key}?fields=issuetype`);
+  const issueResponse = await requestJira(
+    `/rest/api/3/issue/${key}?fields=issuetype`,
+  );
   const issue = await issueResponse.json();
   const typeName = issue.fields.issuetype.name;
   return typeName === "Epic";
-}
+};
 
 const isFlagged = (issue) => {
   const fields = issue.fields;
   return Object.entries(fields).some((entry) => {
     const [key, val] = entry;
-    return key.includes('custom') && JSON.stringify(val).includes('Impediment');
-  })
-}
+    return key.includes("custom") && JSON.stringify(val).includes("Impediment");
+  });
+};
 
 const traverseIssues = async (rootKey) => {
   const queue = [rootKey];
@@ -127,65 +128,72 @@ const traverseIssues = async (rootKey) => {
     allLinks: links,
     allIssues: Object.values(seen),
   };
-}
+};
 
 const makeGraphMermaid = async (rootKey) => {
   const isEpic = await issueIsEpic(rootKey);
   if (isEpic) {
     const issues = await getEpicIssues(rootKey);
     const graph = compileGraphFromEpic(issues);
-    const rendered = await mermaid.render('graphz', graph);
+    const rendered = await mermaid.render("graphz", graph);
     return rendered;
   }
 
   const traverseResult = await traverseIssues(rootKey);
   const { allLinks, allIssues } = traverseResult;
 
-  const nodes = allIssues.map(i => issueToNode(i, i.status));
-  const links = allLinks.filter(l => l.dir === 'out').map((link) => {
-    const arrow = link.dir === 'in' ? '<--' : '-->';
-    return `${link.root.replace('-', '_')} ${arrow}|${link.type}| ${link.other.replace('-', '_')}`;
-  });
+  const nodes = allIssues.map((i) => issueToNode(i, i.status));
+  const links = allLinks
+    .filter((l) => l.dir === "out")
+    .map((link) => {
+      const arrow = link.dir === "in" ? "<--" : "-->";
+      return `${link.root.replace("-", "_")} ${arrow}|${link.type}| ${link.other.replace("-", "_")}`;
+    });
 
   const graphList = [...nodes, ...links];
   const graph = `
   flowchart TD
-  ${graphList.join('\n')}
-  style ${rootKey.replace('-', '_')} stroke:red,stroke-dasharray:5 5
+  ${graphList.join("\n")}
+  style ${rootKey.replace("-", "_")} stroke:red,stroke-dasharray:5 5
   `;
-  const rendered = await mermaid.render('graphz', graph);
+  const rendered = await mermaid.render("graphz", graph);
   return rendered;
-}
+};
 
 const clickedGraph = (event) => {
   const issueName = event.target.textContent;
   const isIssueText = /[a-zA-Z]+-\d+/.test(issueName);
-  if (issueName === null || issueName === '' || !isIssueText || issueName.length > 10) {
+  if (
+    issueName === null ||
+    issueName === "" ||
+    !isIssueText ||
+    issueName.length > 10
+  ) {
     return;
   }
 
   router.open(`/browse/${issueName}`);
-}
+};
 
 function App() {
   const [key, setKey] = useState(null);
   const [graph, setGraph] = useState(null);
 
   useEffect(() => {
-    invoke('getKey', { example: 'my-invoke-variable' }).then(setKey);
+    invoke("getKey", { example: "my-invoke-variable" }).then(setKey);
   }, []);
 
   useEffect(() => {
     makeGraphMermaid(key).then(setGraph);
-  }, [key])
+  }, [key]);
 
   const { svg } = graph ?? {};
-  const graphDiv = graph ? (<div dangerouslySetInnerHTML={{ __html: svg }} onClick={clickedGraph}></div>) : (<div className='rotating'></div>);
-  return (
-    <div>
-      {graphDiv}
-    </div>
+  const graphDiv = graph ? (
+    <div dangerouslySetInnerHTML={{ __html: svg }} onClick={clickedGraph}></div>
+  ) : (
+    <div className="rotating"></div>
   );
+  return <div>{graphDiv}</div>;
 }
 
 export default App;
