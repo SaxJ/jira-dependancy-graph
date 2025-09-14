@@ -25,6 +25,6 @@ modules:
       viewportSize: large
 resources:
   - key: main
-    path: static/dep-graph/build
+    path: static/dep-graph/dist
   - key: logo
     path: static/dep-graph/build
