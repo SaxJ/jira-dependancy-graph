@@ -42,6 +42,7 @@ const parseLink = (root: string, link: IssueLink): ParsedLink | undefined => {
   const other = link.inwardIssue
     ? link.inwardIssue.key
     : link.outwardIssue?.key;
+
   if (!other) {
     return undefined;
   }
@@ -131,7 +132,7 @@ const traverseIssues = async (
   rootKey: string,
 ): Promise<{ allLinks: ParsedLink[]; allIssues: ParsedIssue[] }> => {
   const queue = [rootKey];
-  const links = [];
+  const links: ParsedLink[] = [];
   const seen: Record<
     string,
     { key: string; status: string; flagged: boolean }
@@ -162,15 +163,15 @@ const traverseIssues = async (
       flagged: isFlagged(issue),
     };
 
-    for (let l of issuelinks) {
+    issuelinks.forEach((l) => {
       const parsed = parseLink(currentKey, l);
       if (!parsed) {
-        continue;
+        return;
       }
 
       links.push(parsed);
       queue.push(parsed.other);
-    }
+    });
   }
 
   return {
@@ -192,9 +193,16 @@ export const makeGraph = async (
   const { allLinks, allIssues } = traverseResult;
 
   return {
-    edges: allLinks.map((l) => ({
-      data: { id: `${l.root}_${l.other}`, source: l.root, target: l.other },
-    })),
+    edges: allLinks
+      .filter((l) => l.dir === "out")
+      .map((l) => ({
+        data: {
+          id: `${l.root}_${l.other}`,
+          source: l.root,
+          target: l.other,
+          label: l.type,
+        },
+      })),
     nodes: allIssues.map((i) => ({ data: { id: i.key } })),
   };
 };

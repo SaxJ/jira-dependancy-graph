@@ -1,38 +1,35 @@
+import { invoke } from "@forge/bridge";
 import cytoscape from "cytoscape";
-import "./style.css";
+import { makeGraph } from "./jira";
 
-const graph = cytoscape({
-  container: document.getElementById("graph"),
-  elements: [
-    { data: { id: "a" } },
-    { data: { id: "b" } },
+invoke("getKey").then(async (issueKey) => {
+  const graphDefinition = await makeGraph(issueKey as string);
+  console.log(graphDefinition);
 
-    // edges
-    {
-      data: { id: "ab", source: "a", target: "b" },
-    },
-  ],
-  style: [
-    {
-      selector: "node",
-      style: {
-        "background-color": "#666",
-        label: "data(id)",
+  const graph = cytoscape({
+    container: document.getElementById("graph"),
+    elements: graphDefinition,
+    style: [
+      {
+        selector: "node",
+        style: {
+          "background-color": "#666",
+          label: "data(id)",
+        },
       },
-    },
-
-    {
-      selector: "edge",
-      style: {
-        width: 3,
-        "line-color": "#ccc",
-        "target-arrow-color": "#ccc",
-        "target-arrow-shape": "triangle",
-        "curve-style": "bezier",
+      {
+        selector: "edge",
+        style: {
+          width: 3,
+          "line-color": "#ccc",
+          "target-arrow-color": "#ccc",
+          "target-arrow-shape": "triangle",
+          "curve-style": "bezier",
+          label: "data(label)",
+        },
       },
-    },
-  ],
-  layout: { name: "grid" },
+    ],
+    layout: { name: "grid" },
+  });
+  graph.forceRender();
 });
-
-graph.forceRender();

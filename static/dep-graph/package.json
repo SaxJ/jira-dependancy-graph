@@ -4,13 +4,11 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "tsc && vite build",
-    "preview": "vite preview"
+    "build": "esbuild src/main.ts --bundle --outfile=build/index.js"
   },
   "devDependencies": {
-    "typescript": "~5.8.3",
-    "vite": "^7.0.4"
+    "esbuild": "0.25.9",
+    "typescript": "~5.8.3"
   },
   "dependencies": {
     "@forge/bridge": "^5.2.0",
