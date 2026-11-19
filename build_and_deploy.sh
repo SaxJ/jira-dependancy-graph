@@ -1,5 +1,6 @@
 #! /usr/bin/bash
-cd static/dep-graph || exit
-npm run build
-cd ../../ || exit
-forge deploy
+set -e
+cd "$(dirname "$0")"
+npm ci
+(cd static/dep-graph && npm ci && npm run build)
+forge deploy -e development

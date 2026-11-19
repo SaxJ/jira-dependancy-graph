@@ -1,35 +1,20 @@
 {
-  "name": "jira-issue-panel-custom-ui-static",
-  "version": "0.1.8",
+  "name": "dep-graph",
   "private": true,
-  "homepage": ".",
-  "dependencies": {
-    "@atlaskit/css-reset": "^6.0.1",
-    "@forge/bridge": "2.5.2",
-    "beautiful-react-diagrams": "^0.5.1",
-    "mermaid": "^10.0.2",
-    "react": "^16.13.1",
-    "react-dom": "^16.13.1",
-    "react-mermaid2": "^0.1.4"
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "build": "esbuild src/main.ts --bundle --minify --outfile=build/index.js && cp src/index.html src/logo.svg build/",
+    "typecheck": "tsc"
   },
   "devDependencies": {
-    "react-scripts": "^5.0.1"
+    "esbuild": "0.25.9",
+    "typescript": "~5.8.3",
+    "@types/cytoscape-dagre": "^2.3.4"
   },
-  "scripts": {
-    "start": "react-scripts start",
-    "build": "react-scripts build",
-    "eject": "react-scripts eject"
-  },
-  "browserslist": {
-    "production": [
-      ">0.2%",
-      "not dead",
-      "not op_mini all"
-    ],
-    "development": [
-      "last 1 chrome version",
-      "last 1 firefox version",
-      "last 1 safari version"
-    ]
+  "dependencies": {
+    "@forge/bridge": "^5.2.0",
+    "cytoscape": "^3.33.0",
+    "cytoscape-dagre": "^4.1.0"
   }
 }
