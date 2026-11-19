@@ -91,6 +91,51 @@ const issueLinks = (issue: Issue): ParsedLink[] =>
     .map((l) => parseLink(issue.key, l))
     .filter((l): l is ParsedLink => l !== undefined);
 
+const longestPath = (edges: EdgeDefinition[]): Set<string> => {
+  const outgoing = edges.reduce(
+    (m, e) => m.set(e.data.source, [...(m.get(e.data.source) ?? []), e]),
+    new Map<string, EdgeDefinition[]>(),
+  );
+  const memo = new Map<string, string[]>();
+
+  const from = (node: string, stack: Set<string>): string[] => {
+    const cached = memo.get(node);
+    if (cached) {
+      return cached;
+    }
+    const onStack = new Set([...stack, node]);
+    const best = (outgoing.get(node) ?? [])
+      .filter((e) => !onStack.has(e.data.target))
+      .map((e) => [e.data.id!, ...from(e.data.target, onStack)])
+      .reduce((a, b) => (b.length > a.length ? b : a), [] as string[]);
+    memo.set(node, best);
+    return best;
+  };
+
+  return new Set(
+    [...outgoing.keys()]
+      .map((n) => from(n, new Set()))
+      .reduce((a, b) => (b.length > a.length ? b : a), [] as string[]),
+  );
+};
+
+const criticalEdges = (
+  issues: ParsedIssue[],
+  edges: EdgeDefinition[],
+): Set<string> => {
+  const done = new Set(
+    issues.filter((i) => i.colour === "green").map((i) => i.key),
+  );
+  return longestPath(
+    edges.filter(
+      (e) =>
+        e.data.label === "Blocks" &&
+        !done.has(e.data.source) &&
+        !done.has(e.data.target),
+    ),
+  );
+};
+
 const toElements = (
   issues: ParsedIssue[],
   links: ParsedLink[],
@@ -115,8 +160,14 @@ const toElements = (
       label: l.type,
     },
   }));
+  const critical = criticalEdges(issues, edges);
 
-  return { nodes, edges };
+  return {
+    nodes,
+    edges: edges.map((e) => ({
+      data: { ...e.data, critical: critical.has(e.data.id!) },
+    })),
+  };
 };
 
 const getEpicIssues = async (epicKey: string): Promise<Issue[]> => {

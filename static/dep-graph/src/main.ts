@@ -78,6 +78,15 @@ const buildStyle = (): cytoscape.StylesheetJson => {
         "text-rotation": "autorotate",
       },
     },
+    {
+      selector: "edge[?critical]",
+      style: {
+        width: 4,
+        "line-color": token("--ds-border-warning", "#e56910"),
+        "target-arrow-color": token("--ds-border-warning", "#e56910"),
+        "z-index": 1,
+      },
+    },
   ];
 };
 
