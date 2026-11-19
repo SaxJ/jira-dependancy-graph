@@ -1,5 +1,9 @@
 import { requestJira } from "@forge/bridge";
-import type { EdgeDefinition, ElementsDefinition } from "cytoscape";
+import type {
+  EdgeDefinition,
+  ElementsDefinition,
+  NodeDefinition,
+} from "cytoscape";
 
 interface IssueLink {
   type: {
@@ -15,6 +19,9 @@ interface IssueLink {
 
 interface IssueStatus {
   name: string;
+  statusCategory?: {
+    colorName: string;
+  };
 }
 
 interface Issue {
@@ -32,10 +39,12 @@ interface ParsedLink {
   other: string;
 }
 
-interface ParsedIssue {
+export interface ParsedIssue {
   key: string;
   status: string;
+  colour: string;
   flagged: boolean;
+  isRoot: boolean;
 }
 
 const parseLink = (root: string, link: IssueLink): ParsedLink | undefined => {
@@ -55,49 +64,68 @@ const parseLink = (root: string, link: IssueLink): ParsedLink | undefined => {
   };
 };
 
-const issueToLinks = (issue: Issue): EdgeDefinition[] => {
-  const parentKey = issue.key;
+const isFlagged = (issue: Issue): boolean =>
+  Object.entries(issue.fields).some(
+    ([key, val]) =>
+      key.includes("custom") && JSON.stringify(val).includes("Impediment"),
+  );
 
-  const linkObjects = issue.fields.issuelinks;
-  const links: EdgeDefinition[] = [];
+const parseIssue = (issue: Issue, rootKey: string): ParsedIssue => ({
+  key: issue.key,
+  status: issue.fields.status.name,
+  colour: issue.fields.status.statusCategory?.colorName ?? "",
+  flagged: isFlagged(issue),
+  isRoot: issue.key === rootKey,
+});
 
-  for (const linkObject of linkObjects) {
-    if (linkObject.inwardIssue || !linkObject.outwardIssue) {
-      continue;
-    }
+const unknownIssue = (key: string): ParsedIssue => ({
+  key,
+  status: "",
+  colour: "",
+  flagged: false,
+  isRoot: false,
+});
 
-    links.push({
-      data: {
-        id: `${parentKey}_${linkObject.outwardIssue.key}`,
-        source: parentKey,
-        target: linkObject.outwardIssue.key,
-      },
-    });
-  }
+const issueLinks = (issue: Issue): ParsedLink[] =>
+  issue.fields.issuelinks
+    .map((l) => parseLink(issue.key, l))
+    .filter((l): l is ParsedLink => l !== undefined);
 
-  return links;
-};
+const toElements = (
+  issues: ParsedIssue[],
+  links: ParsedLink[],
+): ElementsDefinition => {
+  const outLinks = links.filter((l) => l.dir === "out");
+  const known = new Set(issues.map((i) => i.key));
+  const missing = [
+    ...new Set(
+      outLinks.flatMap((l) => [l.root, l.other]).filter((k) => !known.has(k)),
+    ),
+  ].map(unknownIssue);
 
-const compileGraphFromEpic = (issues: Issue[]): ElementsDefinition => {
-  const elements: ElementsDefinition = {
-    nodes: [],
-    edges: [],
-  };
+  const nodes: NodeDefinition[] = [...issues, ...missing].map((i) => ({
+    data: { id: i.key, ...i },
+  }));
 
-  for (const issue of issues) {
-    elements.nodes.push({ data: { id: issue.key } });
-    const ls = issueToLinks(issue);
-    for (const l of ls) {
-      elements.edges.push(l);
-    }
-  }
+  const edges: EdgeDefinition[] = outLinks.map((l) => ({
+    data: {
+      id: `${l.root}_${l.type}_${l.other}`,
+      source: l.root,
+      target: l.other,
+      label: l.type,
+    },
+  }));
 
-  return elements;
+  return { nodes, edges };
 };
 
 const getEpicIssues = async (epicKey: string): Promise<Issue[]> => {
-  const epicResponse = await requestJira(`/rest/api/3/search`, {
-    body: `{"fields": ["key","issuelinks","status"], "jql": "parentEpic = ${epicKey} OR parent = ${epicKey}"}`,
+  const epicResponse = await requestJira(`/rest/api/3/search/jql`, {
+    body: JSON.stringify({
+      fields: ["*navigable"],
+      jql: `parentEpic = ${epicKey} OR parent = ${epicKey}`,
+      maxResults: 100,
+    }),
     method: "POST",
     headers: {
       Accept: "application/json",
@@ -105,9 +133,18 @@ const getEpicIssues = async (epicKey: string): Promise<Issue[]> => {
     },
   });
   const epic = await epicResponse.json();
-  const issues = epic.issues;
 
-  return issues;
+  return epic.issues;
+};
+
+const getIssue = async (key: string): Promise<Issue | undefined> => {
+  try {
+    const response = await requestJira(`/rest/api/3/issue/${key}`);
+    return response.ok ? await response.json() : undefined;
+  } catch (e) {
+    console.log(e);
+    return undefined;
+  }
 };
 
 const issueIsEpic = async (key: string): Promise<boolean> => {
@@ -115,94 +152,43 @@ const issueIsEpic = async (key: string): Promise<boolean> => {
     `/rest/api/3/issue/${key}?fields=issuetype`,
   );
   const issue = await issueResponse.json();
-  const typeName = issue.fields.issuetype.name;
-  return typeName === "Epic";
+  return issue.fields.issuetype.name === "Epic";
 };
 
-const isFlagged = (issue: Issue): boolean => {
-  const fields = issue.fields;
-
-  return Object.entries(fields).some((entry) => {
-    const [key, val] = entry;
-    return key.includes("custom") && JSON.stringify(val).includes("Impediment");
-  });
-};
-
-const traverseIssues = async (
-  rootKey: string,
-): Promise<{ allLinks: ParsedLink[]; allIssues: ParsedIssue[] }> => {
-  const queue = [rootKey];
-  const links: ParsedLink[] = [];
-  const seen: Record<
-    string,
-    { key: string; status: string; flagged: boolean }
-  > = {};
-  while (queue.length > 0) {
-    let currentKey = queue.pop();
-    if ((currentKey && currentKey in seen) || !currentKey) {
-      continue;
+const traverseIssues = async (rootKey: string): Promise<Issue[]> => {
+  const visit = async (
+    frontier: string[],
+    seen: Map<string, Issue | undefined>,
+  ): Promise<Issue[]> => {
+    const next = [...new Set(frontier)].filter((k) => !seen.has(k));
+    if (next.length === 0) {
+      return [...seen.values()].filter((i): i is Issue => i !== undefined);
     }
 
-    let issueResponse = null;
-    try {
-      issueResponse = await requestJira(`/rest/api/3/issue/${currentKey}`);
-    } catch (e) {
-      console.log(e);
-    }
-    const issue: Issue | undefined = await issueResponse?.json();
+    const fetched = await Promise.all(next.map(getIssue));
+    const nextSeen = new Map([
+      ...seen,
+      ...next.map((k, idx) => [k, fetched[idx]] as const),
+    ]);
 
-    if (!issue) {
-      continue;
-    }
-
-    const { issuelinks } = issue?.fields ?? {};
-
-    seen[currentKey] = {
-      key: currentKey,
-      status: issue.fields.status.name,
-      flagged: isFlagged(issue),
-    };
-
-    issuelinks.forEach((l) => {
-      const parsed = parseLink(currentKey, l);
-      if (!parsed) {
-        return;
-      }
-
-      links.push(parsed);
-      queue.push(parsed.other);
-    });
-  }
-
-  return {
-    allLinks: links,
-    allIssues: Object.values(seen),
+    return visit(
+      fetched.flatMap((i) => (i ? issueLinks(i).map((l) => l.other) : [])),
+      nextSeen,
+    );
   };
+
+  return visit([rootKey], new Map());
 };
 
 export const makeGraph = async (
   rootKey: string,
 ): Promise<ElementsDefinition> => {
-  const isEpic = await issueIsEpic(rootKey);
-  if (isEpic) {
-    const issues = await getEpicIssues(rootKey);
-    return compileGraphFromEpic(issues);
-  }
+  const issues = (await issueIsEpic(rootKey))
+    ? await getEpicIssues(rootKey)
+    : await traverseIssues(rootKey);
 
-  const traverseResult = await traverseIssues(rootKey);
-  const { allLinks, allIssues } = traverseResult;
-
-  return {
-    edges: allLinks
-      .filter((l) => l.dir === "out")
-      .map((l) => ({
-        data: {
-          id: `${l.root}_${l.other}`,
-          source: l.root,
-          target: l.other,
-          label: l.type,
-        },
-      })),
-    nodes: allIssues.map((i) => ({ data: { id: i.key } })),
-  };
+  return toElements(
+    issues.map((i) => parseIssue(i, rootKey)),
+    issues.flatMap(issueLinks),
+  );
 };
