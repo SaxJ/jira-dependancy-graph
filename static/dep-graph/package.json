@@ -4,14 +4,17 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "build": "esbuild src/main.ts --bundle --outfile=build/index.js"
+    "build": "esbuild src/main.ts --bundle --minify --outfile=build/index.js && cp src/index.html src/logo.svg build/",
+    "typecheck": "tsc"
   },
   "devDependencies": {
     "esbuild": "0.25.9",
-    "typescript": "~5.8.3"
+    "typescript": "~5.8.3",
+    "@types/cytoscape-dagre": "^2.3.4"
   },
   "dependencies": {
     "@forge/bridge": "^5.2.0",
-    "cytoscape": "^3.33.0"
+    "cytoscape": "^3.33.0",
+    "cytoscape-dagre": "^4.1.0"
   }
 }
